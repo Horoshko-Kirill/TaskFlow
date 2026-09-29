@@ -9,6 +9,8 @@ public class Project
     public string? Description { get; set; }
 
     public DateTime CreatedAt { get; set; }
+    
+    public ICollection<ProjectMember> Members { get; set; } = new List<ProjectMember>();
 
     public ICollection<Task> Tasks { get; set; } = new List<Task>();
 }

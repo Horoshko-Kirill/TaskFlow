@@ -10,6 +10,8 @@ public class User
     
     public DateTime CreatedAt { get; set; }
     
+    public ICollection<ProjectMember> ProjectMembers { get; set; } = new List<ProjectMember>();
+    
     public ICollection<Task> AssignedTasks { get; set; } = new  List<Task>();
     
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
