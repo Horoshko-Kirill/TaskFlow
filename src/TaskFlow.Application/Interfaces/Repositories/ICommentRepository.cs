@@ -6,6 +6,10 @@ namespace TaskFlow.Application.Interfaces.Repositories;
 
 public interface ICommentRepository
 {
+    Task<Comment?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default);
+    
     Task<Comment> AddAsync(
         Comment comment,
         CancellationToken cancellationToken = default);

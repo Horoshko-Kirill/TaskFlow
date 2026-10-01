@@ -16,7 +16,17 @@ public class CommentRepository : ICommentRepository
     {
         _context = context;
     }
-    
+
+    public async Task<Comment?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var comment = await _context.Comments
+            .FirstOrDefaultAsync(
+                x => x.Id == id,
+                cancellationToken);
+        
+        return comment;
+    }
+
     public async Task<Comment> AddAsync(Comment comment, CancellationToken cancellationToken = default)
     {
         await _context.Comments.AddAsync(
