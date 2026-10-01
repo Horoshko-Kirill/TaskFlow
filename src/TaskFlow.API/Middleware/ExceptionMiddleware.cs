@@ -22,7 +22,7 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError("Api error {message}", ex.Message);
+            _logger.LogError(ex, "Api error");
             await HandleException(context, ex);
         }
     }
@@ -33,8 +33,7 @@ public class ExceptionMiddleware
         {
             Code = ex.GetType().Name,
             ExceptionName = ex.GetType().Name,
-            ExceptionMessage = ex.Message,
-            StackTrace = ex.StackTrace?.Split('\n').ToList()
+            ExceptionMessage = ex.Message
         };
 
         context.Response.ContentType = "application/json";

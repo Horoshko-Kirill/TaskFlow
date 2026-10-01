@@ -1,4 +1,5 @@
-﻿using TaskFlow.Application.DTO.Comments;
+﻿using FluentValidation;
+using TaskFlow.Application.DTO.Comments;
 using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
@@ -13,18 +14,35 @@ public class CommentService : ICommentService
     private readonly ITaskRepository _taskRepository;
     private readonly IUserRepository _userRepository;
 
+    private readonly IValidator<CreateCommentRequest> _createValidator;
+    private readonly IValidator<UpdateCommentRequest> _updateValidator;
+    private readonly IValidator<PageRequest> _pageValidator;
+
     public CommentService(
         ICommentRepository commentRepository,
         ITaskRepository taskRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IValidator<CreateCommentRequest> createValidator,
+        IValidator<UpdateCommentRequest> updateValidator,
+        IValidator<PageRequest> pageValidator)
     {
         _commentRepository = commentRepository;
         _taskRepository = taskRepository;
         _userRepository = userRepository;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _pageValidator = pageValidator;
     }
-    
-    public async Task<PagedResult<CommentResponse>> GetByTaskIdAsync(Guid taskId, PageRequest request, CancellationToken cancellationToken = default)
+
+    public async Task<PagedResult<CommentResponse>> GetByTaskIdAsync(
+        Guid taskId,
+        PageRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _pageValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var task = await _taskRepository.GetByIdAsync(
             taskId,
             cancellationToken);
@@ -49,8 +67,14 @@ public class CommentService : ICommentService
         };
     }
 
-    public async Task<CommentResponse> CreateAsync(CreateCommentRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommentResponse> CreateAsync(
+        CreateCommentRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _createValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var task = await _taskRepository.GetByIdAsync(
             request.TaskId,
             cancellationToken);
@@ -76,8 +100,15 @@ public class CommentService : ICommentService
         return comment.ToResponse();
     }
 
-    public async Task<CommentResponse> UpdateAsync(Guid id, UpdateCommentRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommentResponse> UpdateAsync(
+        Guid id,
+        UpdateCommentRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _updateValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var comment = await _commentRepository.GetByIdAsync(
             id,
             cancellationToken);
@@ -95,7 +126,9 @@ public class CommentService : ICommentService
         return comment.ToResponse();
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var comment = await _commentRepository.GetByIdAsync(
             id,

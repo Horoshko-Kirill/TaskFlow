@@ -1,4 +1,5 @@
-﻿using TaskFlow.Application.DTO.Users;
+﻿using FluentValidation;
+using TaskFlow.Application.DTO.Users;
 using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
@@ -9,15 +10,27 @@ namespace TaskFlow.Application.Services;
 
 public class UserService : IUserService
 {
-    
     private readonly IUserRepository _userRepository;
 
-    public UserService(IUserRepository userRepository)
+    private readonly IValidator<CreateUserRequest> _createValidator;
+    private readonly IValidator<UpdateUserRequest> _updateValidator;
+    private readonly IValidator<PageRequest> _pageValidator;
+
+    public UserService(
+        IUserRepository userRepository,
+        IValidator<CreateUserRequest> createValidator,
+        IValidator<UpdateUserRequest> updateValidator,
+        IValidator<PageRequest> pageValidator)
     {
         _userRepository = userRepository;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _pageValidator = pageValidator;
     }
-    
-    public async Task<UserResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+
+    public async Task<UserResponse> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetUserByIdAsync(
             id,
@@ -30,8 +43,14 @@ public class UserService : IUserService
         return user.ToResponse();
     }
 
-    public async Task<PagedResult<UserResponse>> GetAllAsync(PageRequest request, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<UserResponse>> GetAllAsync(
+        PageRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _pageValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var result = await _userRepository.GetUsersAsync(
             request,
             cancellationToken);
@@ -47,8 +66,14 @@ public class UserService : IUserService
         };
     }
 
-    public async Task<UserResponse> CreateAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
+    public async Task<UserResponse> CreateAsync(
+        CreateUserRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _createValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var existingUser = await _userRepository.GetUserByEmailAsync(
             request.Email,
             cancellationToken);
@@ -66,8 +91,15 @@ public class UserService : IUserService
         return user.ToResponse();
     }
 
-    public async Task<UserResponse> UpdateAsync(Guid id, UpdateUserRequest request, CancellationToken cancellationToken = default)
+    public async Task<UserResponse> UpdateAsync(
+        Guid id,
+        UpdateUserRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _updateValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var user = await _userRepository.GetUserByIdAsync(
             id,
             cancellationToken);
@@ -93,7 +125,9 @@ public class UserService : IUserService
         return user.ToResponse();
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetUserByIdAsync(
             id,

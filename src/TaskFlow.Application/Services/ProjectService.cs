@@ -1,4 +1,5 @@
-﻿using TaskFlow.Application.DTO.Projects;
+﻿using FluentValidation;
+using TaskFlow.Application.DTO.Projects;
 using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
@@ -11,22 +12,33 @@ namespace TaskFlow.Application.Services;
 
 public class ProjectService : IProjectService
 {
-    
     private readonly IProjectRepository _projectRepository;
     private readonly IProjectMemberRepository _projectMemberRepository;
     private readonly IUserRepository _userRepository;
 
+    private readonly IValidator<CreateProjectRequest> _createValidator;
+    private readonly IValidator<UpdateProjectRequest> _updateValidator;
+    private readonly IValidator<PageRequest> _pageValidator;
+
     public ProjectService(
         IProjectRepository projectRepository,
         IProjectMemberRepository projectMemberRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IValidator<CreateProjectRequest> createValidator,
+        IValidator<UpdateProjectRequest> updateValidator,
+        IValidator<PageRequest> pageValidator)
     {
         _projectRepository = projectRepository;
         _projectMemberRepository = projectMemberRepository;
         _userRepository = userRepository;
+        _createValidator = createValidator;
+        _updateValidator = updateValidator;
+        _pageValidator = pageValidator;
     }
-    
-    public async Task<ProjectResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+
+    public async Task<ProjectResponse> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var project = await _projectRepository.GetByIdAsync(
             id,
@@ -39,8 +51,14 @@ public class ProjectService : IProjectService
         return project.ToResponse();
     }
 
-    public async Task<PagedResult<ProjectResponse>> GetAllAsync(PageRequest request, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ProjectResponse>> GetAllAsync(
+        PageRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _pageValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var result = await _projectRepository.GetProjectsAsync(
             request,
             cancellationToken);
@@ -56,8 +74,15 @@ public class ProjectService : IProjectService
         };
     }
 
-    public async Task<PagedResult<ProjectResponse>> GetByUserIdAsync(Guid userId, PageRequest request, CancellationToken cancellationToken = default)
+    public async Task<PagedResult<ProjectResponse>> GetByUserIdAsync(
+        Guid userId,
+        PageRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _pageValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var user = await _userRepository.GetUserByIdAsync(
             userId,
             cancellationToken);
@@ -82,8 +107,15 @@ public class ProjectService : IProjectService
         };
     }
 
-    public async Task<ProjectResponse> CreateAsync(Guid userId, CreateProjectRequest request, CancellationToken cancellationToken = default)
+    public async Task<ProjectResponse> CreateAsync(
+        Guid userId,
+        CreateProjectRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _createValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var user = await _userRepository.GetUserByIdAsync(
             userId,
             cancellationToken);
@@ -112,8 +144,15 @@ public class ProjectService : IProjectService
         return project.ToResponse();
     }
 
-    public async Task<ProjectResponse> UpdateAsync(Guid id, UpdateProjectRequest request, CancellationToken cancellationToken = default)
+    public async Task<ProjectResponse> UpdateAsync(
+        Guid id,
+        UpdateProjectRequest request,
+        CancellationToken cancellationToken = default)
     {
+        await _updateValidator.ValidateAndThrowAsync(
+            request,
+            cancellationToken);
+
         var project = await _projectRepository.GetByIdAsync(
             id,
             cancellationToken);
@@ -131,7 +170,9 @@ public class ProjectService : IProjectService
         return project.ToResponse();
     }
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
         var project = await _projectRepository.GetByIdAsync(
             id,
