@@ -19,10 +19,10 @@ public interface IProjectMemberRepository
         PageRequest request, 
         CancellationToken cancellationToken = default);
     
-    Task AddAsync(ProjectMember project,
+    Task AddAsync(ProjectMember projectMember,
         CancellationToken cancellationToken = default);
     
-    Task DeleteAsync(ProjectMember project,
+    Task DeleteAsync(ProjectMember projectMember,
         CancellationToken cancellationToken = default);
 
 }
