@@ -62,7 +62,7 @@ public class CommentRepository : ICommentRepository
         var totalCount = await query.CountAsync(cancellationToken);
 
         var items = await query
-            .Skip(request.Skip)
+            .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
 
