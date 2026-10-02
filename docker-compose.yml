@@ -45,7 +45,19 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       Database__ConnectionString: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
-      Frontend__Url: http://localhost:4200
+      Frontend__Url: http://localhost
+
+  frontend:
+    build:
+      context: ./frontend/taskflow-web
+      dockerfile: Dockerfile
+    image: taskflow-frontend
+    container_name: TaskFlow.frontend
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "80:80"
 
 volumes:
   postgres_data:
