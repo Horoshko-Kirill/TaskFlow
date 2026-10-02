@@ -1,0 +1,96 @@
+<main class="page">
+  <section class="page-header">
+    <div>
+      <span class="eyebrow">Workspace</span>
+      <h2>Users</h2>
+      <p>Select the current user for this development session.</p>
+    </div>
+  </section>
+
+  @if (errorMessage) {
+    <div class="message error-message">
+      {{ errorMessage }}
+    </div>
+  }
+
+  @if (successMessage) {
+    <div class="message success-message">
+      {{ successMessage }}
+    </div>
+  }
+
+  <section class="card create-card">
+    <h3>Create user</h3>
+
+    <form (ngSubmit)="createUser()">
+      <div class="form-grid">
+        <div class="field">
+          <label for="user-name">Name</label>
+
+          <input
+            id="user-name"
+            type="text"
+            [(ngModel)]="name"
+            name="name"
+            placeholder="John Doe">
+        </div>
+
+        <div class="field">
+          <label for="user-email">Email</label>
+
+          <input
+            id="user-email"
+            type="email"
+            [(ngModel)]="email"
+            name="email"
+            placeholder="john@example.com">
+        </div>
+      </div>
+
+      <button
+        class="primary-button"
+        type="submit"
+        [disabled]="isCreating">
+
+        {{ isCreating ? 'Creating...' : 'Create user' }}
+      </button>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="section-title">
+      <div>
+        <h3>Available users</h3>
+        <span>{{ users.length }} users</span>
+      </div>
+    </div>
+
+    <div class="user-list">
+      @for (user of users; track user.id) {
+        <article class="user-row">
+          <div class="avatar">
+            {{ user.name.charAt(0).toUpperCase() }}
+          </div>
+
+          <div class="user-info">
+            <strong>{{ user.name }}</strong>
+            <span>{{ user.email }}</span>
+          </div>
+
+          <button
+            type="button"
+            class="secondary-button"
+            [class.selected]="isCurrentUser(user)"
+            (click)="selectUser(user)">
+
+            {{ isCurrentUser(user) ? 'Current user' : 'Select' }}
+          </button>
+        </article>
+      } @empty {
+        <div class="empty-state">
+          No users yet.
+        </div>
+      }
+    </div>
+  </section>
+</main>

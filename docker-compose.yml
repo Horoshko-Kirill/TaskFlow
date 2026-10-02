@@ -1,18 +1,4 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: src/TaskFlow.API/Dockerfile
-    image: taskflow-api
-    container_name: TaskFlow.api
-    depends_on:
-      - db
-    ports:
-      - "8080:8080"
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:8080
-      Database__ConnectionString: Host=TaskFlow.db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
 
   db:
     image: postgres:16
@@ -26,6 +12,40 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrations:
+    build:
+      context: .
+      dockerfile: src/TaskFlow.Migrations/Dockerfile
+    image: taskflow-migrations
+    container_name: TaskFlow.migrations
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      Database__ConnectionString: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+
+  api:
+    build:
+      context: .
+      dockerfile: src/TaskFlow.API/Dockerfile
+    image: taskflow-api
+    container_name: TaskFlow.api
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Database__ConnectionString: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      Frontend__Url: http://localhost:4200
 
 volumes:
   postgres_data:

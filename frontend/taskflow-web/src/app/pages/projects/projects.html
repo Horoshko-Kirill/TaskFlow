@@ -1,0 +1,193 @@
+<main class="page">
+  <section class="page-header">
+    <div>
+      <span class="eyebrow">Workspace</span>
+      <h2>Projects</h2>
+      <p>Projects you created or joined.</p>
+    </div>
+
+    <button
+      class="primary-button"
+      type="button"
+      (click)="showCreateForm = !showCreateForm">
+      {{ showCreateForm ? 'Close' : '+ New project' }}
+    </button>
+  </section>
+
+  @if (!currentUserService.userId) {
+    <section class="notice">
+      <strong>No current user selected.</strong>
+
+      <span>
+        Open Users and select a user before working with projects.
+      </span>
+
+      <a routerLink="/users">
+        Open Users
+      </a>
+    </section>
+  }
+
+  @if (errorMessage) {
+    <div class="message error">
+      {{ errorMessage }}
+    </div>
+  }
+
+  @if (successMessage) {
+    <div class="message success">
+      {{ successMessage }}
+    </div>
+  }
+
+  @if (showCreateForm) {
+    <section class="card create-card">
+      <h3>Create project</h3>
+
+      <form (ngSubmit)="createProject()">
+        <div class="field">
+          <label for="project-name">Name</label>
+
+          <input
+            id="project-name"
+            type="text"
+            [(ngModel)]="projectName"
+            name="projectName"
+            placeholder="Website redesign"
+            required>
+        </div>
+
+        <div class="field">
+          <label for="project-description">
+            Description
+          </label>
+
+          <textarea
+            id="project-description"
+            [(ngModel)]="projectDescription"
+            name="projectDescription"
+            placeholder="Describe the project...">
+          </textarea>
+        </div>
+
+        <div class="form-actions">
+          <button
+            class="primary-button"
+            type="submit"
+            [disabled]="isCreating || !currentUserService.userId">
+            {{ isCreating ? 'Creating...' : 'Create project' }}
+          </button>
+
+          <button
+            class="secondary-button"
+            type="button"
+            (click)="showCreateForm = false">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+
+  @if (currentUserService.userId) {
+    <section class="toolbar">
+      <span>
+        {{ totalCount }} projects
+      </span>
+
+      <label class="page-size">
+        Show
+
+        <select
+          [(ngModel)]="pageSize"
+          (ngModelChange)="changePageSize()"
+          name="pageSize">
+          <option [ngValue]="10">10</option>
+          <option [ngValue]="25">25</option>
+          <option [ngValue]="50">50</option>
+          <option [ngValue]="100">100</option>
+        </select>
+
+        projects
+      </label>
+    </section>
+
+    @if (isLoading) {
+      <div class="loading">
+        Loading projects...
+      </div>
+    } @else {
+      <section class="projects-grid">
+        @for (project of projects; track project.id) {
+          <article class="project-card">
+            <div class="project-icon">
+              {{ project.name.charAt(0).toUpperCase() }}
+            </div>
+
+            <div class="project-content">
+              <h3>{{ project.name }}</h3>
+
+              @if (project.description) {
+                <p>{{ project.description }}</p>
+              } @else {
+                <p class="muted">No description</p>
+              }
+
+              <span class="date">
+                Created
+                {{ project.createdAt | date:'mediumDate' }}
+              </span>
+            </div>
+
+            <div class="project-actions">
+              <a
+                class="primary-button"
+                [routerLink]="['/projects', project.id]">
+                Open
+              </a>
+
+              <button
+                class="danger-button"
+                type="button"
+                (click)="deleteProject(project)">
+                Delete
+              </button>
+            </div>
+          </article>
+        } @empty {
+          <div class="empty-state">
+            <div class="empty-icon">+</div>
+
+            <h3>No projects</h3>
+
+            <p>
+              You are not a member of any project yet.
+            </p>
+          </div>
+        }
+      </section>
+    }
+  }
+
+  @if (totalPages > 1) {
+    <div class="pagination">
+      <button
+        type="button"
+        (click)="changePage(page - 1)"
+        [disabled]="page === 1">
+        Previous
+      </button>
+
+      <span>
+        Page {{ page }} of {{ totalPages }}
+      </span>
+
+      <button
+        type="button"
+        (click)="changePage(page + 1)"
+        [disabled]="page === totalPages">
+        Next
+      </button>
+    </div>
+  }
+</main>

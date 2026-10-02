@@ -1,0 +1,181 @@
+<main class="page">
+
+  <section class="page-header">
+    <div>
+      <h2>My Tasks</h2>
+      <p>Tasks assigned to the current user.</p>
+    </div>
+  </section>
+
+  @if (!currentUserService.userId) {
+
+    <section class="notice-card">
+      <strong>No current user selected.</strong>
+
+      <span>
+        Open Users and select a user first.
+      </span>
+    </section>
+
+  } @else {
+
+    @if (errorMessage) {
+      <div class="error-message">
+        {{ errorMessage }}
+      </div>
+    }
+
+    <section class="filters-card">
+
+      <div class="filter-title">
+        <strong>Filters</strong>
+
+        <span>
+          {{ filteredTasks.length }} tasks
+        </span>
+      </div>
+
+      <label>
+        Priority
+
+        <select
+          [(ngModel)]="selectedPriority">
+
+          <option [ngValue]="null">
+            All priorities
+          </option>
+
+          <option
+            [ngValue]="TaskPriority.Low">
+            Low
+          </option>
+
+          <option
+            [ngValue]="TaskPriority.Medium">
+            Medium
+          </option>
+
+          <option
+            [ngValue]="TaskPriority.High">
+            High
+          </option>
+
+          <option
+            [ngValue]="TaskPriority.Critical">
+            Critical
+          </option>
+
+        </select>
+
+      </label>
+
+    </section>
+
+    @if (isLoading) {
+
+      <div class="empty-state">
+        Loading tasks...
+      </div>
+
+    } @else if (filteredTasks.length === 0) {
+
+      <div class="empty-state">
+        <strong>No tasks found.</strong>
+
+        <span>
+          There are no tasks matching the selected filter.
+        </span>
+      </div>
+
+    } @else {
+
+      <section class="kanban" cdkDropListGroup>
+        @for (column of [
+          { status: TaskStatus.Todo, title: 'To do' },
+          { status: TaskStatus.InProgress, title: 'In progress' },
+          { status: TaskStatus.Done, title: 'Done' }
+        ]; track column.status) {
+          <section class="kanban-column">
+            <header class="column-header">
+              <h3>{{ column.title }}</h3>
+              <span>{{ getTasksByStatus(column.status).length }}</span>
+            </header>
+            <div class="task-list"
+              cdkDropList
+              [cdkDropListData]="column.status"
+              [cdkDropListSortingDisabled]="true"
+              (cdkDropListDropped)="dropTask($event)">
+              @for (task of getTasksByStatus(column.status); track task.id) {
+                <article class="task-card" cdkDrag [cdkDragData]="task">
+                  <div class="drag-placeholder" *cdkDragPlaceholder></div>
+
+            <div class="task-main">
+
+              <div class="task-header">
+
+                <span
+                  class="priority priority-{{ task.priority }}">
+                  {{ getPriorityName(task.priority) }}
+                </span>
+
+                <span
+                  class="status status-{{ task.status }}">
+                  {{ getStatusName(task.status) }}
+                </span>
+
+              </div>
+
+              <h3>
+                {{ task.title }}
+              </h3>
+
+              @if (task.description) {
+                <p>
+                  {{ task.description }}
+                </p>
+              }
+
+              <div class="task-meta">
+
+                <span>
+                  Project:
+                  <strong>
+                    {{ getProjectName(task.projectId) }}
+                  </strong>
+                </span>
+
+                @if (task.dueDate) {
+                  <span>
+                    Due:
+                    {{ task.dueDate | date:'mediumDate' }}
+                  </span>
+                }
+
+              </div>
+
+            </div>
+
+            <a
+              class="open-button"
+              [routerLink]="[
+                '/projects',
+                task.projectId
+              ]">
+              Open project
+            </a>
+
+                </article>
+              }
+              @if (getTasksByStatus(column.status).length === 0) {
+                <div class="drop-empty">Drop tasks here</div>
+              }
+            </div>
+          </section>
+        }
+      </section>
+
+    }
+
+  }
+
+</main>

@@ -1,1 +1,31 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  --yellow: #f5c400;
+  --yellow-hover: #e2b400;
+  --yellow-soft: #fff7cc;
+  --black: #171717;
+  --white: #ffffff;
+  --gray-100: #f7f7f5;
+  --gray-200: #e8e7e2;
+  --gray-300: #d0cec6;
+  --gray-500: #77766f;
+  --gray-700: #4b4a45;
+  --radius: 16px;
+  --shadow: 0 12px 32px rgb(23 23 23 / 7%);
+}
+
+html {
+  background: #f7f7f5;
+}
+
+body {
+  margin: 0;
+  color: var(--black);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

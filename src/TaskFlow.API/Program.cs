@@ -6,6 +6,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+    {
+        policy
+            .WithOrigins(builder.Configuration["Frontend:Url"]!)
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddOpenApi();
 
 builder.Services.AddApplication(builder.Configuration);
@@ -21,6 +32,8 @@ builder.Services.AddHttpLogging(options =>
 var app = builder.Build();
 
 app.UseHttpLogging();
+
+app.UseCors("Frontend");
 
 app.UseMiddleware<ExceptionMiddleware>();
 

@@ -1,0 +1,545 @@
+<main class="page">
+  @if (!project) {
+    @if (errorMessage) {
+      <div class="message error-message">{{ errorMessage }}</div>
+    } @else {
+      <div class="loading-project">Loading project...</div>
+    }
+  } @else {
+
+    <section class="project-header">
+      <div>
+        <a
+          routerLink="/projects"
+          class="back-link">
+          ← Projects
+        </a>
+
+        <h2>{{ project.name }}</h2>
+
+        @if (project.description) {
+          <p>{{ project.description }}</p>
+        }
+      </div>
+    </section>
+
+    <div class="toast-stack" aria-live="polite">
+      @if (errorMessage) {
+        <div class="message error-message" role="alert">
+          {{ errorMessage }}
+        </div>
+      }
+
+      @if (successMessage) {
+        <div class="message success-message" role="status">
+          {{ successMessage }}
+        </div>
+      }
+    </div>
+
+    <section class="members-card">
+
+      <div class="members-header">
+        <div>
+          <h3>Project members</h3>
+          <span>
+            {{ members.length }} members
+          </span>
+        </div>
+
+        <button
+          class="secondary-button"
+          (click)="showMembers = !showMembers">
+          {{ showMembers ? 'Hide' : 'Show' }}
+        </button>
+      </div>
+
+      @if (showMembers) {
+
+        <div class="add-member">
+          <select
+            [(ngModel)]="selectedMemberId"
+            name="selectedMemberId">
+
+            <option
+              value="">
+              Select user
+            </option>
+
+            @for (
+              user of availableUsers;
+              track user.id
+            ) {
+              <option
+                [value]="user.id">
+                {{ user.name }} — {{ user.email }}
+              </option>
+            }
+          </select>
+
+          <button
+            class="primary-button"
+            [disabled]="
+              !selectedMemberId ||
+              isAddingMember
+            "
+            (click)="addMember()">
+            {{ isAddingMember ? 'Adding...' : 'Add member' }}
+          </button>
+        </div>
+
+        @if (members.length === 0) {
+          <div class="members-empty">
+            No members found.
+          </div>
+        } @else {
+          <div class="members-list">
+
+            @for (
+              member of members;
+              track member.userId
+            ) {
+              <div class="member-row">
+
+                <div class="member-info">
+                  <strong>
+                    {{ member.name }}
+                  </strong>
+
+                  <span>
+                    {{ member.email }}
+                  </span>
+                </div>
+
+                <button
+                  class="remove-member-button"
+                  (click)="removeMember(member)">
+                  Remove
+                </button>
+
+              </div>
+            }
+
+          </div>
+        }
+      }
+
+    </section>
+
+    <div class="task-create-action">
+      <button
+        class="primary-button"
+        type="button"
+        (click)="showCreateForm = !showCreateForm">
+        {{ showCreateForm ? 'Close task form' : '+ New task' }}
+      </button>
+    </div>
+
+    @if (showCreateForm) {
+      <section class="create-card">
+
+        <h3>Create task</h3>
+
+        <form (ngSubmit)="createTask()">
+
+          <div class="form-grid">
+
+            <div class="field full">
+              <label>Title</label>
+
+              <input
+                type="text"
+                [(ngModel)]="title"
+                name="title"
+                placeholder="Implement authentication"
+                required>
+            </div>
+
+            <div class="field full">
+              <label>Description</label>
+
+              <textarea
+                [(ngModel)]="description"
+                name="description"
+                placeholder="Task description">
+              </textarea>
+            </div>
+
+            <div class="field">
+              <label>Assignee</label>
+
+              <select
+                [(ngModel)]="assigneeId"
+                name="assigneeId">
+
+                <option
+                  [ngValue]="null">
+                  Unassigned
+                </option>
+
+                @for (
+                  member of members;
+                  track member.userId
+                ) {
+                  <option
+                    [ngValue]="member.userId">
+                    {{ member.name }}
+                  </option>
+                }
+
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Priority</label>
+
+              <select
+                [(ngModel)]="priority"
+                name="priority">
+
+                <option
+                  [ngValue]="TaskPriority.Low">
+                  Low
+                </option>
+
+                <option
+                  [ngValue]="TaskPriority.Medium">
+                  Medium
+                </option>
+
+                <option
+                  [ngValue]="TaskPriority.High">
+                  High
+                </option>
+
+                <option
+                  [ngValue]="TaskPriority.Critical">
+                  Critical
+                </option>
+
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Due date</label>
+
+              <input
+                type="date"
+                [(ngModel)]="dueDate"
+                [min]="minDueDate"
+                name="dueDate">
+              <span class="field-hint">Choose today or a future date.</span>
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+
+            <button
+              class="primary-button"
+              type="submit"
+              [disabled]="isCreatingTask">
+              {{
+                isCreatingTask
+                  ? 'Creating...'
+                  : 'Create task'
+              }}
+            </button>
+
+            <button
+              class="secondary-button"
+              type="button"
+              (click)="resetForm()">
+              Cancel
+            </button>
+
+          </div>
+
+        </form>
+
+      </section>
+    }
+
+    <section class="board-toolbar">
+
+      <label class="checkbox">
+
+        <input
+          type="checkbox"
+          [(ngModel)]="onlyMyTasks"
+          [disabled]="!currentUserService.userId">
+
+        <span>Only my tasks</span>
+
+      </label>
+
+      <span class="task-count">
+        {{ visibleTasks.length }} tasks
+      </span>
+
+    </section>
+
+    <section
+      class="kanban"
+      cdkDropListGroup>
+
+      @for (
+        column of columns;
+        track column.status
+      ) {
+
+        <div class="kanban-column">
+
+          <div class="column-header">
+
+            <div>
+              <h3>{{ column.title }}</h3>
+
+              <span>
+                {{ getTasksByStatus(column.status).length }}
+              </span>
+            </div>
+
+          </div>
+
+          <div
+            class="task-list"
+            cdkDropList
+            [cdkDropListData]="column.status"
+            [cdkDropListSortingDisabled]="true"
+            (cdkDropListDropped)="dropTask($event)">
+
+            @for (
+              task of getTasksByStatus(column.status);
+              track task.id
+            ) {
+
+              <article
+                class="task-card"
+                [class.done]="task.status === TaskStatus.Done"
+                cdkDrag
+                [cdkDragData]="task">
+
+                <div
+                  class="drag-placeholder"
+                  *cdkDragPlaceholder>
+                </div>
+
+                <div class="task-top">
+
+                  <span
+                    class="priority priority-{{ task.priority }}">
+                    {{ getPriorityName(task.priority) }}
+                  </span>
+
+                  <button
+                    class="icon-button"
+                    (click)="deleteTask(task)">
+                    ×
+                  </button>
+
+                </div>
+
+                <h4>{{ task.title }}</h4>
+
+                @if (task.description) {
+                  <p>{{ task.description }}</p>
+                }
+
+                <div class="task-meta">
+
+                  <span>
+                    {{ getUserName(task.assigneeId) }}
+                  </span>
+
+                  @if (task.dueDate) {
+                    <span>
+                      Due
+                      {{ task.dueDate | date:'mediumDate' }}
+                    </span>
+                  }
+
+                </div>
+
+                <div class="task-actions">
+
+                  @if (task.status !== TaskStatus.Todo) {
+                    <button
+                      class="status-button"
+                      (click)="changeStatus(
+                        task,
+                        TaskStatus.Todo
+                      )">
+                      To do
+                    </button>
+                  }
+
+                  @if (
+                    task.status !==
+                    TaskStatus.InProgress
+                  ) {
+                    <button
+                      class="status-button"
+                      (click)="changeStatus(
+                        task,
+                        TaskStatus.InProgress
+                      )">
+                      In progress
+                    </button>
+                  }
+
+                  @if (task.status !== TaskStatus.Done) {
+                    <button
+                      class="status-button"
+                      (click)="changeStatus(
+                        task,
+                        TaskStatus.Done
+                      )">
+                      Done
+                    </button>
+                  }
+
+                </div>
+
+                <div class="comments-section">
+
+                  <button
+                    class="comments-toggle"
+                    (click)="toggleComments(task.id)">
+
+                    Comments
+                    ({{ commentsByTask[task.id]?.length ?? 0 }})
+
+                  </button>
+
+                  @if (commentsExpanded[task.id]) {
+
+                    <div class="comments">
+
+                      @if (commentsLoading[task.id]) {
+
+                        <div class="comments-loading">
+                          Loading comments...
+                        </div>
+
+                      } @else {
+
+                        @if (
+                          commentsByTask[task.id]?.length
+                        ) {
+
+                          @for (
+                            comment of commentsByTask[task.id];
+                            track comment.id
+                          ) {
+
+                            <div class="comment">
+
+                              <div class="comment-header">
+
+                                <strong>
+                                  {{
+                                    getUserName(
+                                      comment.authorId
+                                    )
+                                  }}
+                                </strong>
+
+                                <span>
+                                  {{
+                                    comment.createdAt
+                                      | date:'short'
+                                  }}
+                                </span>
+
+                              </div>
+
+                              <p>
+                                {{ comment.text }}
+                              </p>
+
+                              <div class="comment-actions">
+
+                                <button
+                                  (click)="editComment(comment)">
+                                  Edit
+                                </button>
+
+                                <button
+                                  (click)="deleteComment(comment)">
+                                  Delete
+                                </button>
+
+                              </div>
+
+                            </div>
+
+                          }
+
+                        } @else {
+
+                          <div class="no-comments">
+                            No comments yet.
+                          </div>
+
+                        }
+
+                      }
+
+                      @if (currentUserService.userId) {
+
+                        <div class="add-comment">
+
+                          <textarea
+                            [(ngModel)]="commentTexts[task.id]"
+                            [name]="'comment-' + task.id"
+                            placeholder="Write a comment...">
+                          </textarea>
+
+                          <button
+                            class="comment-button"
+                            [disabled]="
+                              !commentTexts[task.id]?.trim()
+                            "
+                            (click)="addComment(task.id)">
+                            Add comment
+                          </button>
+
+                        </div>
+
+                      } @else {
+
+                        <div class="comment-login-notice">
+                          Select a current user to add comments.
+                        </div>
+
+                      }
+
+                    </div>
+
+                  }
+
+                </div>
+
+              </article>
+
+            }
+
+            @if (
+              getTasksByStatus(column.status).length === 0
+            ) {
+              <div class="drop-empty">
+                Drop tasks here
+              </div>
+            }
+
+          </div>
+
+        </div>
+
+      }
+
+    </section>
+
+  }
+</main>

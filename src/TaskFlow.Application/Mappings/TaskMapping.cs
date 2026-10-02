@@ -5,7 +5,8 @@ namespace TaskFlow.Application.Mappings;
 
 public static class TaskMapping
 {
-    public static DomainTask ToEntity(this CreateTaskRequest request)
+    public static DomainTask ToEntity(
+        this CreateTaskRequest request)
     {
         return new DomainTask
         {
@@ -17,7 +18,7 @@ public static class TaskMapping
             Status = request.Status,
             Priority = request.Priority,
             CreatedAt = DateTime.UtcNow,
-            DueDate = request.DueDate
+            DueDate = ToUtc(request.DueDate)
         };
     }
 
@@ -30,7 +31,7 @@ public static class TaskMapping
         task.Description = request.Description;
         task.Status = request.Status;
         task.Priority = request.Priority;
-        task.DueDate = request.DueDate;
+        task.DueDate = ToUtc(request.DueDate);
     }
 
     public static TaskResponse ToResponse(
@@ -48,5 +49,16 @@ public static class TaskMapping
             CreatedAt = task.CreatedAt,
             DueDate = task.DueDate
         };
+    }
+
+    private static DateTime? ToUtc(
+        DateTime? value)
+    {
+        if (value is null)
+            return null;
+
+        return DateTime.SpecifyKind(
+            value.Value,
+            DateTimeKind.Utc);
     }
 }

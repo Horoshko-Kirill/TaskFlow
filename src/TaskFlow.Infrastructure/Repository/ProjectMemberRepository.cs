@@ -32,6 +32,7 @@ public class ProjectMemberRepository : IProjectMemberRepository
     {
         var query = _context.ProjectMembers
             .AsNoTracking()
+            .Include(x => x.User)
             .Where(x => x.ProjectId == projectId)
             .OrderBy(x => x.JoinedAt);
 
