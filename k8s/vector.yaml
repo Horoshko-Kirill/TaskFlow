@@ -1,0 +1,198 @@
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vector
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - namespaces
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vector
+subjects:
+  - kind: ServiceAccount
+    name: vector
+    namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector
+  namespace: default
+data:
+  vector.yaml: |
+    data_dir: /var/lib/vector
+
+    sources:
+      kubernetes:
+        type: kubernetes_logs
+        auto_partial_merge: true
+
+    transforms:
+      taskflow_only:
+        type: filter
+        inputs:
+          - kubernetes
+        condition:
+          type: vrl
+          source: |
+            pod_name = to_string(.kubernetes.pod_name) ?? ""
+            is_api = starts_with(pod_name, "taskflow-api-")
+            is_web = starts_with(pod_name, "taskflow-web-")
+            is_api || is_web
+
+      normalize:
+        type: remap
+        inputs:
+          - taskflow_only
+        source: |
+          .pod_name = to_string(.kubernetes.pod_name) ?? "unknown"
+          .namespace = to_string(.kubernetes.pod_namespace) ?? "default"
+          .container_name = to_string(.kubernetes.container_name) ?? "unknown"
+          .node_name = to_string(.kubernetes.pod_node_name) ?? "unknown"
+
+          if starts_with(.pod_name, "taskflow-api-") {
+            .service = "taskflow-api"
+          } else {
+            .service = "taskflow-web"
+          }
+
+          .message = to_string(.message) ?? ""
+
+          parsed, parse_err = parse_json(.message)
+
+          if parse_err == null && is_object(parsed) {
+            .log_data = parsed
+
+            if exists(parsed.level) {
+              .level = to_string(parsed.level) ?? "info"
+            } else if exists(parsed.Level) {
+              .level = to_string(parsed.Level) ?? "info"
+            }
+
+            if exists(parsed.message) {
+              .message = to_string(parsed.message) ?? .message
+            } else if exists(parsed.Message) {
+              .message = to_string(parsed.Message) ?? .message
+            }
+
+            if exists(parsed.status) {
+              status_code, status_err = to_int(parsed.status)
+              if status_err == null {
+                .status_code = status_code
+              }
+            }
+
+            if exists(parsed.status_code) {
+              status_code, status_err = to_int(parsed.status_code)
+              if status_err == null {
+                .status_code = status_code
+              }
+            }
+
+            if exists(parsed.request_time) {
+              request_duration, duration_err = to_float(parsed.request_time)
+              if duration_err == null {
+                .duration_ms = request_duration * 1000.0
+              }
+            }
+
+            if exists(parsed.path) {
+              .path = to_string(parsed.path) ?? ""
+            }
+
+            if exists(parsed.method) {
+              .method = to_string(parsed.method) ?? ""
+            }
+          }
+
+          if !exists(.level) {
+            .level = "info"
+          }
+
+          .environment = "development"
+          .application = "taskflow"
+
+    sinks:
+      victorialogs:
+        type: http
+        inputs:
+          - normalize
+        uri: "http://victoria-logs:9428/insert/jsonline?_stream_fields=application,service,namespace,container_name&_msg_field=message&_time_field=timestamp"
+        method: post
+        compression: gzip
+        encoding:
+          codec: json
+        framing:
+          method: newline_delimited
+        healthcheck:
+          enabled: false
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: vector
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: vector
+  template:
+    metadata:
+      labels:
+        app: vector
+    spec:
+      serviceAccountName: vector
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: vector
+          image: timberio/vector:0.53.0-debian
+          imagePullPolicy: IfNotPresent
+          args:
+            - --config
+            - /etc/vector/vector.yaml
+          env:
+            - name: VECTOR_SELF_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          volumeMounts:
+            - name: config
+              mountPath: /etc/vector
+              readOnly: true
+            - name: var-log-pods
+              mountPath: /var/log/pods
+              readOnly: true
+            - name: var-lib-vector
+              mountPath: /var/lib/vector
+      volumes:
+        - name: config
+          configMap:
+            name: vector
+        - name: var-log-pods
+          hostPath:
+            path: /var/log/pods
+            type: Directory
+        - name: var-lib-vector
+          hostPath:
+            path: /var/lib/vector
+            type: DirectoryOrCreate
