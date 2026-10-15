@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Microsoft.Extensions.Logging;
 using TaskFlow.Application.DTO.ProjectMembers;
 using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Interfaces.Repositories;
@@ -16,19 +17,22 @@ public class ProjectMemberService : IProjectMemberService
 
     private readonly IValidator<AddProjectMemberRequest> _addValidator;
     private readonly IValidator<PageRequest> _pageValidator;
-
+    
+    private readonly ILogger<ProjectMemberService> _logger;
     public ProjectMemberService(
         IProjectRepository projectRepository,
         IProjectMemberRepository projectMemberRepository,
         IUserRepository userRepository,
         IValidator<AddProjectMemberRequest> addValidator,
-        IValidator<PageRequest> pageValidator)
+        IValidator<PageRequest> pageValidator,
+        ILogger<ProjectMemberService> logger)
     {
         _projectRepository = projectRepository;
         _projectMemberRepository = projectMemberRepository;
         _userRepository = userRepository;
         _addValidator = addValidator;
         _pageValidator = pageValidator;
+        _logger = logger;
     }
 
     public async Task<PagedResult<ProjectMemberListItemResponse>> GetByProjectIdAsync(
@@ -103,6 +107,11 @@ public class ProjectMemberService : IProjectMemberService
         await _projectMemberRepository.AddAsync(
             member,
             cancellationToken);
+        
+        _logger.LogInformation(
+            "User {UserId} added to project {ProjectId}",
+            user.Id,
+            projectId);
 
         return member.ToResponse();
     }
@@ -120,7 +129,12 @@ public class ProjectMemberService : IProjectMemberService
         if (member is null)
             throw new NotFoundException(
                 "Project member was not found.");
-
+        
+        _logger.LogInformation(
+            "User {UserId} removed from project {ProjectId}",
+            userId,
+            projectId);
+        
         await _projectMemberRepository.DeleteAsync(
             member,
             cancellationToken);

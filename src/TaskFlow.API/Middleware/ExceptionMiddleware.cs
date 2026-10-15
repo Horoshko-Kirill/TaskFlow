@@ -22,12 +22,41 @@ public class ExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Api error");
-            await HandleException(context, ex);
+            var statusCode = GetStatusCode(ex);
+            
+            var logLevel = statusCode >= 500
+                ? LogLevel.Error
+                : LogLevel.Warning;
+            
+            _logger.Log(
+                logLevel,
+                ex,
+                "Request failed with status {StatusCode}. Exception {ExceptionType} on {RequestMethod} {RequestPath}",
+                statusCode,
+                ex.GetType().Name,
+                context.Request.Method,
+                context.Request.Path);
+            
+            await HandleException(context, ex, statusCode);
         }
     }
     
-    private static async Task HandleException(HttpContext context, Exception ex)
+    private static int GetStatusCode(Exception ex)
+    {
+        return ex switch
+        {
+            BadRequestException => StatusCodes.Status400BadRequest,
+            ValidationException => StatusCodes.Status400BadRequest,
+            ConflictException => StatusCodes.Status409Conflict,
+            NotFoundException => StatusCodes.Status404NotFound,
+            _ => StatusCodes.Status500InternalServerError
+        };
+    }
+    
+    private static async Task HandleException(
+        HttpContext context, 
+        Exception ex,
+        int statusCode)
     {
         var response = new ApiErrorResponse
         {
@@ -38,14 +67,7 @@ public class ExceptionMiddleware
 
         context.Response.ContentType = "application/json";
 
-        context.Response.StatusCode = ex switch
-        {
-            BadRequestException => 400,
-            ValidationException => 400,
-            ConflictException => 409,
-            NotFoundException => 404,
-            _ => 500
-        };
+        context.Response.StatusCode = statusCode;
 
         await context.Response.WriteAsJsonAsync(response);
     }

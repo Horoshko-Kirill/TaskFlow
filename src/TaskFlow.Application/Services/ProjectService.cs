@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Microsoft.Extensions.Logging;
 using TaskFlow.Application.DTO.Projects;
 using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Interfaces.Repositories;
@@ -19,14 +20,17 @@ public class ProjectService : IProjectService
     private readonly IValidator<CreateProjectRequest> _createValidator;
     private readonly IValidator<UpdateProjectRequest> _updateValidator;
     private readonly IValidator<PageRequest> _pageValidator;
-
+    
+    private readonly ILogger<ProjectService> _logger;
+    
     public ProjectService(
         IProjectRepository projectRepository,
         IProjectMemberRepository projectMemberRepository,
         IUserRepository userRepository,
         IValidator<CreateProjectRequest> createValidator,
         IValidator<UpdateProjectRequest> updateValidator,
-        IValidator<PageRequest> pageValidator)
+        IValidator<PageRequest> pageValidator,
+        ILogger<ProjectService> logger)
     {
         _projectRepository = projectRepository;
         _projectMemberRepository = projectMemberRepository;
@@ -34,6 +38,7 @@ public class ProjectService : IProjectService
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _pageValidator = pageValidator;
+        _logger = logger;
     }
 
     public async Task<ProjectResponse> GetByIdAsync(
@@ -140,7 +145,12 @@ public class ProjectService : IProjectService
         await _projectMemberRepository.AddAsync(
             member,
             cancellationToken);
-
+        
+        _logger.LogInformation(
+            "User {UserId} create project {ProjectId}",
+            userId,
+            project.Id);
+        
         return project.ToResponse();
     }
 
@@ -181,7 +191,11 @@ public class ProjectService : IProjectService
         if (project is null)
             throw new NotFoundException(
                 $"Project with id '{id}' was not found.");
-
+        
+        _logger.LogInformation(
+            "Project {ProjectId} removed",
+            project.Id);
+        
         await _projectRepository.DeleteAsync(
             project,
             cancellationToken);

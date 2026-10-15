@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using Microsoft.Extensions.Logging;
 using TaskFlow.Application.DTO.Users;
 using TaskFlow.Application.Exceptions;
 using TaskFlow.Application.Interfaces.Repositories;
@@ -15,17 +16,20 @@ public class UserService : IUserService
     private readonly IValidator<CreateUserRequest> _createValidator;
     private readonly IValidator<UpdateUserRequest> _updateValidator;
     private readonly IValidator<PageRequest> _pageValidator;
-
+    
+    private readonly ILogger<UserService> _logger;
     public UserService(
         IUserRepository userRepository,
         IValidator<CreateUserRequest> createValidator,
         IValidator<UpdateUserRequest> updateValidator,
-        IValidator<PageRequest> pageValidator)
+        IValidator<PageRequest> pageValidator,
+        ILogger<UserService> logger)
     {
         _userRepository = userRepository;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _pageValidator = pageValidator;
+        _logger = logger;
     }
 
     public async Task<UserResponse> GetByIdAsync(
@@ -87,7 +91,11 @@ public class UserService : IUserService
         await _userRepository.AddAsync(
             user,
             cancellationToken);
-
+        
+        _logger.LogInformation(
+            "User {UserId} created",
+            user.Id);
+        
         return user.ToResponse();
     }
 
@@ -136,7 +144,11 @@ public class UserService : IUserService
         if (user is null)
             throw new NotFoundException(
                 $"User with id '{id}' was not found.");
-
+        
+        _logger.LogInformation(
+            "User {UserId} removed",
+            user.Id);
+        
         await _userRepository.DeleteAsync(
             id,
             cancellationToken);

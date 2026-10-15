@@ -1,8 +1,22 @@
+using System.Text.Json;
 using TaskFlow.API.Middleware;
 using TaskFlow.Application.DI;
 using TaskFlow.Infrastructure.DI;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+
+builder.Logging.AddJsonConsole(options =>
+{
+    options.IncludeScopes = true;
+    options.TimestampFormat = "yyyy-MM-dd HH:mm:ss";
+    options.UseUtcTimestamp = true;
+    options.JsonWriterOptions = new JsonWriterOptions
+    {
+        Indented = false
+    };
+});
 
 builder.Services.AddControllers();
 
@@ -22,16 +36,47 @@ builder.Services.AddOpenApi();
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 
-builder.Services.AddHttpLogging(options =>
-{
-    options.LoggingFields =
-        Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.RequestPropertiesAndHeaders |
-        Microsoft.AspNetCore.HttpLogging.HttpLoggingFields.ResponsePropertiesAndHeaders;
-});
-
 var app = builder.Build();
 
-app.UseHttpLogging();
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices
+        .GetRequiredService<ILogger<Program>>();
+    
+    using var scope = logger.BeginScope(
+        new Dictionary<string, object>
+        {
+            ["service.name"] = "taskflow-api",
+            ["service.environment"] = app.Environment.EnvironmentName
+        });
+
+    var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+    try
+    {
+        await next();
+    }
+    finally
+    {
+        stopwatch.Stop();
+
+        var statusCode = context.Response.StatusCode;
+
+        var logLevel = statusCode >= 500
+            ? LogLevel.Error
+            : statusCode >= 400
+                ? LogLevel.Warning
+                : LogLevel.Information;
+
+        logger.Log(
+            logLevel,
+            "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {ElapsedMs} ms",
+            context.Request.Method,
+            context.Request.Path,
+            statusCode,
+            stopwatch.ElapsedMilliseconds);
+    }
+});
 
 app.UseCors("Frontend");
 
