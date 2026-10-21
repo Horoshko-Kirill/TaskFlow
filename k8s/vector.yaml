@@ -1,4 +1,3 @@
-
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -15,10 +14,7 @@ rules:
       - pods
       - namespaces
       - nodes
-    verbs:
-      - get
-      - list
-      - watch
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -48,7 +44,7 @@ data:
         auto_partial_merge: true
 
     transforms:
-      taskflow_only:
+      exclude_internal:
         type: filter
         inputs:
           - kubernetes
@@ -56,43 +52,165 @@ data:
           type: vrl
           source: |
             pod_name = to_string(.kubernetes.pod_name) ?? ""
-            is_api = starts_with(pod_name, "taskflow-api-")
-            is_web = starts_with(pod_name, "taskflow-web-")
-            is_api || is_web
+            app_label = to_string(.kubernetes.pod_labels.app) ?? ""
+            app_name_label = to_string(.kubernetes.pod_labels."app.kubernetes.io/name") ?? ""
+
+            is_vector = starts_with(pod_name, "vector-") || app_label == "vector"
+            is_victoria_logs = starts_with(pod_name, "victoria-logs-") || app_label == "victoria-logs" || app_name_label == "victoria-logs-single"
+
+            !is_vector && !is_victoria_logs
 
       normalize:
         type: remap
         inputs:
-          - taskflow_only
+          - exclude_internal
         source: |
-          .pod_name = to_string(.kubernetes.pod_name) ?? "unknown"
-          .namespace = to_string(.kubernetes.pod_namespace) ?? "default"
-          .container_name = to_string(.kubernetes.container_name) ?? "unknown"
-          .node_name = to_string(.kubernetes.pod_node_name) ?? "unknown"
+          raw_message = to_string(.message) ?? ""
+          pod_name = to_string(.kubernetes.pod_name) ?? "unknown"
+          namespace = to_string(.kubernetes.pod_namespace) ?? "default"
+          container_name = to_string(.kubernetes.container_name) ?? "unknown"
+          node_name = to_string(.kubernetes.pod_node_name) ?? "unknown"
+          app_label = to_string(.kubernetes.pod_labels.app) ?? ""
 
-          if starts_with(.pod_name, "taskflow-api-") {
-            .service = "taskflow-api"
+          .pod_name = pod_name
+          .namespace = namespace
+          .container_name = container_name
+          .node_name = node_name
+          .message = raw_message
+          .timestamp_source = "container_runtime"
+          .level = "unknown"
+
+          if starts_with(pod_name, "taskflow-") {
+            .application = "taskflow"
+          } else if app_label != "" {
+            .application = app_label
           } else {
-            .service = "taskflow-web"
+            .application = namespace
           }
 
-          .message = to_string(.message) ?? ""
+          if app_label != "" {
+            .service = app_label
+          } else if container_name != "unknown" {
+            .service = container_name
+          } else {
+            .service = pod_name
+          }
 
-          parsed, parse_err = parse_json(.message)
+          raw_level = ""
+          parsed, parse_err = parse_json(raw_message)
 
           if parse_err == null && is_object(parsed) {
             .log_data = parsed
 
+            # Keep the service name supplied by the application when present.
+            if exists(parsed.service) {
+              parsed_service = to_string(parsed.service) ?? ""
+              if parsed_service != "" {
+                .service = parsed_service
+              }
+            }
+            .service_name = .service
+            ."service.name" = .service
+
+            # Read level fields one by one. Guarding each field avoids a missing
+            # earlier key preventing a later key (for example frontend "level")
+            # from being read.
             if exists(parsed.level) {
-              .level = to_string(parsed.level) ?? "info"
-            } else if exists(parsed.Level) {
-              .level = to_string(parsed.Level) ?? "info"
+              raw_level = downcase(to_string(parsed.level) ?? "")
+            }
+            if raw_level == "" && exists(parsed.Level) {
+              raw_level = downcase(to_string(parsed.Level) ?? "")
+            }
+            if raw_level == "" && exists(parsed.LogLevel) {
+              raw_level = downcase(to_string(parsed.LogLevel) ?? "")
+            }
+            if raw_level == "" && exists(parsed.logLevel) {
+              raw_level = downcase(to_string(parsed.logLevel) ?? "")
+            }
+            if raw_level == "" && exists(parsed.severity) {
+              raw_level = downcase(to_string(parsed.severity) ?? "")
+            }
+            if raw_level == "" && exists(parsed.severity_text) {
+              raw_level = downcase(to_string(parsed.severity_text) ?? "")
+            }
+            if raw_level == "" && exists(parsed.Severity) {
+              raw_level = downcase(to_string(parsed.Severity) ?? "")
+            }
+            if raw_level == "" && exists(parsed."@l") {
+              raw_level = downcase(to_string(parsed."@l") ?? "")
+            }
+            if raw_level == "" && exists(parsed.log) && is_object(parsed.log) && exists(parsed.log.level) {
+              raw_level = downcase(to_string(parsed.log.level) ?? "")
+            }
+            if raw_level == "" && exists(parsed.State) && is_object(parsed.State) && exists(parsed.State.LogLevel) {
+              raw_level = downcase(to_string(parsed.State.LogLevel) ?? "")
+            }
+            if raw_level == "" && exists(parsed.State) && is_object(parsed.State) && exists(parsed.State.level) {
+              raw_level = downcase(to_string(parsed.State.level) ?? "")
             }
 
-            if exists(parsed.message) {
-              .message = to_string(parsed.message) ?? .message
-            } else if exists(parsed.Message) {
-              .message = to_string(parsed.Message) ?? .message
+            # Microsoft.Extensions.Logging numeric enum values:
+            # Trace=0, Debug=1, Information=2, Warning=3, Error=4,
+            # Critical=5, None=6. Also normalize common text aliases.
+            if raw_level == "trace" || raw_level == "trce" || raw_level == "0" {
+              .level = "trace"
+            } else if raw_level == "debug" || raw_level == "dbug" || raw_level == "1" {
+              .level = "debug"
+            } else if raw_level == "information" || raw_level == "info" || raw_level == "inf" || raw_level == "2" {
+              .level = "info"
+            } else if raw_level == "warning" || raw_level == "warn" || raw_level == "wrn" || raw_level == "3" {
+              .level = "warn"
+            } else if raw_level == "error" || raw_level == "err" || raw_level == "fail" || raw_level == "4" {
+              .level = "error"
+            } else if raw_level == "critical" || raw_level == "fatal" || raw_level == "crit" || raw_level == "5" {
+              .level = "critical"
+            } else if raw_level == "none" || raw_level == "6" {
+              .level = "unknown"
+            } else if raw_level != "" {
+              .level = raw_level
+            }
+
+            # Prefer the application's timestamp. Keep the original RFC3339
+            # string if parsing a variant fails; VictoriaLogs can read it from
+            # the configured _time_field.
+            raw_timestamp = ""
+            if exists(parsed.timestamp) {
+              raw_timestamp = to_string(parsed.timestamp) ?? ""
+            }
+            if raw_timestamp == "" && exists(parsed.Timestamp) {
+              raw_timestamp = to_string(parsed.Timestamp) ?? ""
+            }
+            if raw_timestamp == "" && exists(parsed."@t") {
+              raw_timestamp = to_string(parsed."@t") ?? ""
+            }
+
+            if raw_timestamp != "" {
+              timestamp_rfc, timestamp_rfc_err = parse_timestamp(raw_timestamp, format: "%+")
+              if timestamp_rfc_err == null {
+                .timestamp = timestamp_rfc
+                .timestamp_source = "application"
+              } else {
+                timestamp_dotnet, timestamp_dotnet_err = parse_timestamp(raw_timestamp, format: "%Y-%m-%d %H:%M:%S%.f", timezone: "UTC")
+                if timestamp_dotnet_err == null {
+                  .timestamp = timestamp_dotnet
+                  .timestamp_source = "application"
+                } else {
+                  # Preserve a source timestamp string as a final fallback.
+                  .timestamp = raw_timestamp
+                  .timestamp_source = "application"
+                }
+              }
+            }
+
+            # Use a human-readable message, but retain the original JSON in log_data.
+            if exists(parsed.Message) {
+              .message = to_string(parsed.Message) ?? raw_message
+            } else if exists(parsed.message) {
+              .message = to_string(parsed.message) ?? raw_message
+            } else if exists(parsed.event) {
+              .message = to_string(parsed.event) ?? raw_message
+            } else if exists(parsed."@m") {
+              .message = to_string(parsed."@m") ?? raw_message
             }
 
             if exists(parsed.status) {
@@ -101,36 +219,107 @@ data:
                 .status_code = status_code
               }
             }
-
             if exists(parsed.status_code) {
               status_code, status_err = to_int(parsed.status_code)
               if status_err == null {
                 .status_code = status_code
               }
             }
-
+            if exists(parsed.path) {
+              .path = to_string(parsed.path) ?? ""
+            } else if exists(parsed.request_uri) {
+              .path = to_string(parsed.request_uri) ?? ""
+            } else if exists(parsed.RequestPath) {
+              .path = to_string(parsed.RequestPath) ?? ""
+            }
+            if exists(parsed.method) {
+              .method = to_string(parsed.method) ?? ""
+            } else if exists(parsed.request_method) {
+              .method = to_string(parsed.request_method) ?? ""
+            } else if exists(parsed.RequestMethod) {
+              .method = to_string(parsed.RequestMethod) ?? ""
+            }
             if exists(parsed.request_time) {
               request_duration, duration_err = to_float(parsed.request_time)
               if duration_err == null {
                 .duration_ms = request_duration * 1000.0
               }
             }
-
-            if exists(parsed.path) {
-              .path = to_string(parsed.path) ?? ""
-            }
-
-            if exists(parsed.method) {
-              .method = to_string(parsed.method) ?? ""
+            if exists(parsed.ElapsedMs) {
+              elapsed_ms, elapsed_err = to_float(parsed.ElapsedMs)
+              if elapsed_err == null {
+                .duration_ms = elapsed_ms
+              }
             }
           }
 
-          if !exists(.level) {
-            .level = "info"
+          # Fallback for non-JSON backend console logs such as:
+          # "warn: Category[0] ..." or "fail: Category[0] ...".
+          if .level == "unknown" {
+            lower_message = downcase(raw_message)
+
+            prefix_level, prefix_level_err = parse_regex(lower_message, r'^\s*(?P<level>trace|trce|debug|dbug|information|info|warn|warning|error|err|fail|critical|crit|fatal)\s*:')
+            if prefix_level_err == null {
+              raw_level = prefix_level.level
+            } else {
+              bracket_level, bracket_level_err = parse_regex(lower_message, r'^\s*\[(?P<level>trce|dbug|info|inf|wrn|warn|err|error|fail|crit|critical)\]')
+              if bracket_level_err == null {
+                raw_level = bracket_level.level
+              } else {
+                key_level, key_level_err = parse_regex(lower_message, r'\b(?:level|severity)\s*[=:]\s*(?P<level>trace|debug|information|info|warning|warn|error|critical|fatal)\b')
+                if key_level_err == null {
+                  raw_level = key_level.level
+                }
+              }
+            }
+
+            if raw_level == "trace" || raw_level == "trce" {
+              .level = "trace"
+            } else if raw_level == "debug" || raw_level == "dbug" {
+              .level = "debug"
+            } else if raw_level == "information" || raw_level == "info" || raw_level == "inf" {
+              .level = "info"
+            } else if raw_level == "warning" || raw_level == "warn" || raw_level == "wrn" {
+              .level = "warn"
+            } else if raw_level == "error" || raw_level == "err" || raw_level == "fail" {
+              .level = "error"
+            } else if raw_level == "critical" || raw_level == "crit" || raw_level == "fatal" {
+              .level = "critical"
+            }
           }
 
-          .environment = "development"
-          .application = "taskflow"
+          # Parse common non-JSON Nginx timestamp formats when present.
+          if .timestamp_source == "container_runtime" {
+            nginx_prefix, nginx_prefix_err = parse_regex(raw_message, r'^(?P<nginx_ts>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})')
+            if nginx_prefix_err == null {
+              nginx_ts, nginx_ts_err = parse_timestamp(nginx_prefix.nginx_ts, format: "%Y/%m/%d %H:%M:%S", timezone: "UTC")
+              if nginx_ts_err == null {
+                .timestamp = nginx_ts
+                .timestamp_source = "process_log"
+              }
+            } else {
+              nginx_access, nginx_access_err = parse_regex(raw_message, r'\[(?P<nginx_ts>\d{2}/[A-Za-z]{3}/\d{4}:\d{2}:\d{2}:\d{2} [+-]\d{4})\]')
+              if nginx_access_err == null {
+                nginx_ts, nginx_ts_err = parse_timestamp(nginx_access.nginx_ts, format: "%d/%b/%Y:%H:%M:%S %z")
+                if nginx_ts_err == null {
+                  .timestamp = nginx_ts
+                  .timestamp_source = "process_log"
+                }
+              }
+            }
+          }
+
+          .service_name = .service
+          ."service.name" = .service
+
+          environment_label = to_string(.kubernetes.pod_labels.environment) ?? to_string(.kubernetes.pod_labels.env) ?? ""
+          if environment_label != "" {
+            .environment = downcase(environment_label)
+          } else if .application == "taskflow" {
+            .environment = "development"
+          } else {
+            .environment = namespace
+          }
 
     sinks:
       victorialogs:
@@ -142,8 +331,12 @@ data:
         compression: gzip
         encoding:
           codec: json
+          timestamp_format: rfc3339
         framing:
           method: newline_delimited
+        request:
+          headers:
+            Content-Type: "application/stream+json"
         healthcheck:
           enabled: false
 ---
