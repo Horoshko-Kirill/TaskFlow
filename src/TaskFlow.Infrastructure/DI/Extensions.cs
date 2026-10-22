@@ -2,8 +2,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using TaskFlow.Application.Interfaces.Metrics;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Infrastructure.Database;
+using TaskFlow.Infrastructure.Metrics;
 using TaskFlow.Infrastructure.Options;
 using TaskFlow.Infrastructure.Repository;
 
@@ -20,6 +22,8 @@ public static class Extensions
         services.AddScoped<IProjectRepository, ProjectRepository>();
         services.AddScoped<ITaskRepository, TaskRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+
+        services.AddSingleton<ITaskFlowMetrics, PrometheusTaskFlowMetrics>();
         
         return services;
     }

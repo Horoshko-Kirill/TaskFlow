@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using TaskFlow.Application.DTO.Users;
 using TaskFlow.Application.Exceptions;
+using TaskFlow.Application.Interfaces.Metrics;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
 using TaskFlow.Application.Mappings;
@@ -18,18 +19,22 @@ public class UserService : IUserService
     private readonly IValidator<PageRequest> _pageValidator;
     
     private readonly ILogger<UserService> _logger;
+    
+    private readonly ITaskFlowMetrics _metrics;
     public UserService(
         IUserRepository userRepository,
         IValidator<CreateUserRequest> createValidator,
         IValidator<UpdateUserRequest> updateValidator,
         IValidator<PageRequest> pageValidator,
-        ILogger<UserService> logger)
+        ILogger<UserService> logger,
+        ITaskFlowMetrics metrics)
     {
         _userRepository = userRepository;
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _pageValidator = pageValidator;
         _logger = logger;
+        _metrics = metrics;
     }
 
     public async Task<UserResponse> GetByIdAsync(
@@ -91,6 +96,8 @@ public class UserService : IUserService
         await _userRepository.AddAsync(
             user,
             cancellationToken);
+        
+        _metrics.IncrementUsersCreated();
         
         _logger.LogInformation(
             "User {UserId} created",

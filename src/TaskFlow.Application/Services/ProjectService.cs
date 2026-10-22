@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using TaskFlow.Application.DTO.Projects;
 using TaskFlow.Application.Exceptions;
+using TaskFlow.Application.Interfaces.Metrics;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
 using TaskFlow.Application.Mappings;
@@ -23,6 +24,8 @@ public class ProjectService : IProjectService
     
     private readonly ILogger<ProjectService> _logger;
     
+    private readonly ITaskFlowMetrics _metrics;
+    
     public ProjectService(
         IProjectRepository projectRepository,
         IProjectMemberRepository projectMemberRepository,
@@ -30,7 +33,8 @@ public class ProjectService : IProjectService
         IValidator<CreateProjectRequest> createValidator,
         IValidator<UpdateProjectRequest> updateValidator,
         IValidator<PageRequest> pageValidator,
-        ILogger<ProjectService> logger)
+        ILogger<ProjectService> logger,
+        ITaskFlowMetrics metrics)
     {
         _projectRepository = projectRepository;
         _projectMemberRepository = projectMemberRepository;
@@ -39,6 +43,7 @@ public class ProjectService : IProjectService
         _updateValidator = updateValidator;
         _pageValidator = pageValidator;
         _logger = logger;
+        _metrics = metrics;
     }
 
     public async Task<ProjectResponse> GetByIdAsync(
@@ -145,6 +150,8 @@ public class ProjectService : IProjectService
         await _projectMemberRepository.AddAsync(
             member,
             cancellationToken);
+        
+        _metrics.IncrementProjectsCreated();
         
         _logger.LogInformation(
             "User {UserId} create project {ProjectId}",

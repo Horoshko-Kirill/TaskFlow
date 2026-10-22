@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using TaskFlow.Application.DTO.Tasks;
 using TaskFlow.Application.Exceptions;
+using TaskFlow.Application.Interfaces.Metrics;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
 using TaskFlow.Application.Mappings;
@@ -20,6 +21,8 @@ public class TaskService : ITaskService
     private readonly IValidator<UpdateTaskRequest> _updateValidator;
     private readonly IValidator<PageRequest> _pageValidator;
 
+    private readonly ITaskFlowMetrics _metrics;
+
     public TaskService(
         ITaskRepository taskRepository,
         IProjectRepository projectRepository,
@@ -27,7 +30,8 @@ public class TaskService : ITaskService
         IProjectMemberRepository projectMemberRepository,
         IValidator<CreateTaskRequest> createValidator,
         IValidator<UpdateTaskRequest> updateValidator,
-        IValidator<PageRequest> pageValidator)
+        IValidator<PageRequest> pageValidator,
+        ITaskFlowMetrics metrics)
     {
         _taskRepository = taskRepository;
         _projectRepository = projectRepository;
@@ -36,6 +40,7 @@ public class TaskService : ITaskService
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _pageValidator = pageValidator;
+        _metrics = metrics;
     }
 
     public async Task<TaskResponse> GetByIdAsync(
@@ -179,6 +184,8 @@ public class TaskService : ITaskService
         await _taskRepository.AddAsync(
             task,
             cancellationToken);
+        
+        _metrics.IncrementTasksCreated();
 
         return task.ToResponse();
     }
@@ -205,11 +212,19 @@ public class TaskService : ITaskService
             request.AssigneeId,
             cancellationToken);
 
+        var previousStatus = task.Status;
+
         request.UpdateEntity(task);
 
         await _taskRepository.UpdateAsync(
             task,
             cancellationToken);
+
+        if (previousStatus != TaskFlow.Domain.Enum.TaskStatus.Done &&
+            task.Status == TaskFlow.Domain.Enum.TaskStatus.Done)
+        {
+            _metrics.IncrementTasksCompleted();
+        }
 
         return task.ToResponse();
     }

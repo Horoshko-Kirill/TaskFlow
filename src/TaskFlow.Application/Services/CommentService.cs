@@ -1,6 +1,7 @@
 ﻿using FluentValidation;
 using TaskFlow.Application.DTO.Comments;
 using TaskFlow.Application.Exceptions;
+using TaskFlow.Application.Interfaces.Metrics;
 using TaskFlow.Application.Interfaces.Repositories;
 using TaskFlow.Application.Interfaces.Services;
 using TaskFlow.Application.Mappings;
@@ -18,13 +19,15 @@ public class CommentService : ICommentService
     private readonly IValidator<UpdateCommentRequest> _updateValidator;
     private readonly IValidator<PageRequest> _pageValidator;
 
+    private readonly ITaskFlowMetrics _metrics;
     public CommentService(
         ICommentRepository commentRepository,
         ITaskRepository taskRepository,
         IUserRepository userRepository,
         IValidator<CreateCommentRequest> createValidator,
         IValidator<UpdateCommentRequest> updateValidator,
-        IValidator<PageRequest> pageValidator)
+        IValidator<PageRequest> pageValidator,
+        ITaskFlowMetrics metrics)
     {
         _commentRepository = commentRepository;
         _taskRepository = taskRepository;
@@ -32,6 +35,7 @@ public class CommentService : ICommentService
         _createValidator = createValidator;
         _updateValidator = updateValidator;
         _pageValidator = pageValidator;
+        _metrics = metrics;
     }
 
     public async Task<PagedResult<CommentResponse>> GetByTaskIdAsync(
@@ -96,6 +100,8 @@ public class CommentService : ICommentService
         await _commentRepository.AddAsync(
             comment,
             cancellationToken);
+        
+        _metrics.IncrementCommentsCreated();
 
         return comment.ToResponse();
     }

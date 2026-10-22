@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Prometheus;
+using Prometheus.DotNetRuntime;
 using TaskFlow.API.Middleware;
 using TaskFlow.Application.DI;
 using TaskFlow.Infrastructure.DI;
@@ -37,6 +39,13 @@ builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+var runtimeCollector = DotNetRuntimeStatsBuilder
+    .Default()
+    .StartCollecting();
+
+app.Lifetime.ApplicationStopped.Register(
+    runtimeCollector.Dispose);
 
 app.Use(async (context, next) =>
 {
@@ -78,6 +87,10 @@ app.Use(async (context, next) =>
     }
 });
 
+app.UseRouting();
+
+app.UseHttpMetrics();
+
 app.UseCors("Frontend");
 
 app.UseMiddleware<ExceptionMiddleware>();
@@ -95,5 +108,7 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapControllers();
+
+app.MapMetrics();
 
 app.Run();
