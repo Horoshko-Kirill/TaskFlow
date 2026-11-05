@@ -1,0 +1,82 @@
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: taskflow-alert-rules
+  namespace: monitoring
+data:
+  taskflow-alerts.yaml: |
+    groups:
+      - name: taskflow-service-alerts
+        interval: 15s
+        rules:
+
+          - alert: TaskFlowHighErrorRate
+            expr: |
+              (
+                (
+                  sum(rate(http_requests_received_total{
+                    app="taskflow-api",
+                    code=~"5.."
+                  }[5m])) or vector(0)
+                )
+                /
+                sum(rate(http_requests_received_total{
+                  app="taskflow-api"
+                }[5m]))
+              ) > 0.05
+            for: 2m
+            labels:
+              severity: critical
+              service: taskflow-api
+              category: service
+            annotations:
+              summary: "TaskFlow API: высокий процент ошибок"
+              description: "Более 5% HTTP-запросов завершаются ошибками 5xx."
+
+          - alert: TaskFlowHighLatency
+            expr: |
+              histogram_quantile(
+                0.95,
+                sum by (le) (
+                  rate(http_request_duration_seconds_bucket{
+                    app="taskflow-api"
+                  }[5m])
+                )
+              ) > 0.5
+            for: 5m
+            labels:
+              severity: warning
+              service: taskflow-api
+              category: service
+            annotations:
+              summary: "TaskFlow API: повышенное время ответа"
+              description: "95-й перцентиль времени ответа превышает 500 мс."
+
+          - alert: TaskFlowHighMemoryUsage
+            expr: |
+              system_runtime_dotnet_process_memory_working_set{
+                app="taskflow-api"
+              } > 419430400
+            for: 5m
+            labels:
+              severity: warning
+              service: taskflow-api
+              category: dotnet-runtime
+            annotations:
+              summary: "TaskFlow API: высокое потребление памяти"
+              description: "Working Set процесса .NET превышает 400 MiB."
+
+          - alert: TaskFlowThreadPoolOverload
+            expr: |
+              system_runtime_threadpool_queue_length{
+                app="taskflow-api"
+              } > 50
+            for: 2m
+            labels:
+              severity: warning
+              service: taskflow-api
+              category: dotnet-runtime
+            annotations:
+              summary: "TaskFlow API: перегрузка ThreadPool"
+              description: "В очереди .NET ThreadPool более 50 задач."
